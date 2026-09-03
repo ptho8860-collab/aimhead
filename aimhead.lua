@@ -1,5 +1,5 @@
 -- =====================================================================
--- PHUOCTHOPC CONTROL HUB - V8.1 SILENT AIM EDITION
+-- PHUOCTHOPC CONTROL HUB - V8.1 SILENT AIM & FULL UTILITY EDITION
 -- =====================================================================
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
@@ -9,15 +9,16 @@ local player = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local VirtualUser = game:GetService("VirtualUser")
+local GuiService = game:GetService("GuiService")
 local camera = workspace.CurrentCamera
 
--- DỌN DẸP DRAWING CŨ NẾU RE-EXECUTE
+-- DỌN DẸP SCRIPT CŨ NẾU CHẠY LẠI
 if _G.PhuocThoCleanUp then
     pcall(_G.PhuocThoCleanUp)
 end
 
 -- TRẠNG THÁI TÍNH NĂNG
-local silentAimEnabled = true -- ĐẠN ĐUỔI
+local silentAimEnabled = true
 local aimlockEnabled = false
 local skeletonEspEnabled = false
 local boxEspEnabled = false
@@ -36,20 +37,23 @@ local flySpeed = 50
 local walkSpeedValue = 50
 local hitboxSizeValue = 18
 local fovRadius = 140
-local aimSmoothness = 0.35
-local predictionAmount = 0.08
+local aimSmoothness = 0.2
 local defaultHitboxSize = Vector3.new(2, 2, 1)
 
--- MÀU SẮC CHUẨN MM2
+-- MÀU SẮC MM2 & VISUALS
 local colorMurderer = Color3.fromRGB(255, 0, 50)
 local colorSheriff = Color3.fromRGB(0, 150, 255)
 local colorHero = Color3.fromRGB(255, 220, 0)
 local colorInnocent = Color3.fromRGB(0, 255, 120)
 local colorDroppedGun = Color3.fromRGB(255, 170, 0)
 
--- =====================================================================
--- 1. SILENT AIM HOOK (CƠ CHẾ BẺ HƯỚNG ĐẠN / DAO)
--- =====================================================================
+-- HOOK SILENT AIM (BẺ HƯỚNG BẮN)
+local function getMousePos()
+    local mouseLoc = UserInputService:GetMouseLocation()
+    local guiInset = GuiService:GetGuiInset()
+    return Vector2.new(mouseLoc.X, mouseLoc.Y - guiInset.Y)
+end
+
 local function getClosestHeadToMouse()
     local closestHead = nil
     local shortestDistance = fovRadius
@@ -74,7 +78,7 @@ local function getClosestHeadToMouse()
     return closestHead
 end
 
--- Hook Metatable để can thiệp Raycast bắn súng
+-- Hook Metatable
 local gmt = getrawmetatable and getrawmetatable(game)
 if gmt and setreadonly then
     setreadonly(gmt, false)
@@ -101,7 +105,7 @@ if gmt and setreadonly then
 end
 
 -- =====================================================================
--- 2. KHỞI TẠO RAYFIELD WINDOW UI
+-- UI CREATION
 -- =====================================================================
 local Window = Rayfield:CreateWindow({
    Name = "PHUOCTHOPC CONTROL HUB v8.1",
@@ -112,25 +116,21 @@ local Window = Rayfield:CreateWindow({
    KeySystem = false
 })
 
--- TAB CHỨC NĂNG
 local TabCombat = Window:CreateTab("⚔️ Combat & Aim", 4483362458)
 local TabMovement = Window:CreateTab("🏃 Movement", 4483362458)
 local TabVisuals = Window:CreateTab("👁️ Visuals (ESP)", 4483362458)
 local TabMM2 = Window:CreateTab("🔪 MM2 Utility", 4483362458)
 local TabSystem = Window:CreateTab("⚙️ System", 4483362458)
 
--- --- TAB 1: COMBAT & AIM ---
+-- COMBAT
 TabCombat:CreateToggle({
    Name = "🎯 Đạn Đuổi / Silent Aim (Bắn/Phóng Dao Tự Trúng)",
    CurrentValue = silentAimEnabled,
-   Callback = function(Value) 
-       silentAimEnabled = Value 
-       Rayfield:Notify({ Title = "Combat", Content = Value and "Đã BẬT Đạn Đuổi!" or "Đã TẮT Đạn Đuổi!", Duration = 2 })
-   end,
+   Callback = function(Value) silentAimEnabled = Value end,
 })
 
 TabCombat:CreateToggle({
-   Name = "AimLock Head (Giữ phím E / Tự xoay cam)",
+   Name = "AimLock Head (Giữ phím E để khóa mục tiêu)",
    CurrentValue = aimlockEnabled,
    Callback = function(Value) aimlockEnabled = Value end,
 })
@@ -159,7 +159,7 @@ TabCombat:CreateSlider({
    Callback = function(Value) hitboxSizeValue = Value end,
 })
 
--- --- TAB 2: MOVEMENT ---
+-- MOVEMENT
 TabMovement:CreateToggle({
    Name = "Speed Hack (Chạy nhanh)",
    CurrentValue = speedEnabled,
@@ -202,17 +202,11 @@ TabMovement:CreateToggle({
    Callback = function(Value) infJumpEnabled = Value end,
 })
 
--- --- TAB 3: VISUALS (ESP) ---
+-- VISUALS
 TabVisuals:CreateToggle({
-   Name = "ESP Box + Thanh HP + Tên",
+   Name = "ESP Highlight / Box",
    CurrentValue = boxEspEnabled,
    Callback = function(Value) boxEspEnabled = Value end,
-})
-
-TabVisuals:CreateToggle({
-   Name = "ESP Skeleton (Khung xương)",
-   CurrentValue = skeletonEspEnabled,
-   Callback = function(Value) skeletonEspEnabled = Value end,
 })
 
 TabVisuals:CreateToggle({
@@ -221,7 +215,7 @@ TabVisuals:CreateToggle({
    Callback = function(Value) tracerEspEnabled = Value end,
 })
 
--- --- TAB 4: MM2 UTILITY ---
+-- MM2 UTILITY
 TabMM2:CreateToggle({
    Name = "MM2 Role Detector (Soi Vai Trò)",
    CurrentValue = mm2RoleEspEnabled,
@@ -237,14 +231,19 @@ TabMM2:CreateToggle({
 TabMM2:CreateButton({
    Name = "⚡ Dịch chuyển tới Súng Rơi (TP Gun)",
    Callback = function()
-       local gun = nil
+       local gunPart = nil
        for _, obj in pairs(workspace:GetChildren()) do
-           if obj:IsA("Tool") and (obj.Name == "GunDrop" or obj.Name:lower():find("gun")) then gun = obj break end
+           if obj:IsA("Tool") and (obj.Name == "GunDrop" or obj.Name:lower():find("gun")) then
+               gunPart = obj:FindFirstChildOfClass("BasePart") or obj.PrimaryPart
+               break
+           elseif obj:IsA("BasePart") and obj.Name == "GunDrop" then
+               gunPart = obj
+               break
+           end
        end
        local char = player.Character
        local root = char and (char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso"))
-       if gun and root then
-           local gunPart = gun:FindFirstChildOfClass("BasePart") or gun.PrimaryPart or gun
+       if gunPart and root then
            root.CFrame = gunPart.CFrame + Vector3.new(0, 2, 0)
            Rayfield:Notify({ Title = "MM2 Teleport", Content = "Đã dịch chuyển tới vị trí súng!", Duration = 2 })
        else
@@ -253,7 +252,7 @@ TabMM2:CreateButton({
    end,
 })
 
--- --- TAB 5: SYSTEM ---
+-- SYSTEM
 TabSystem:CreateToggle({
    Name = "Anti-AFK (Chống văng 20 phút)",
    CurrentValue = antiAfkEnabled,
@@ -269,7 +268,7 @@ TabSystem:CreateButton({
 })
 
 -- =====================================================================
--- 3. CORE LOOP & RENDER LOGIC
+-- CORE LOGIC & ESP SYSTEM
 -- =====================================================================
 local fovCircle = Drawing.new("Circle")
 fovCircle.Thickness = 1.5
@@ -279,6 +278,40 @@ fovCircle.Transparency = 0.7
 fovCircle.NumSides = 60
 fovCircle.Visible = false
 
+-- LƯU TRỮ VẼ ESP TRACER
+local tracers = {}
+
+local function getRoleColor(targetPlayer)
+    if not targetPlayer or not targetPlayer.Character then return colorInnocent end
+    local char = targetPlayer.Character
+    local backpack = targetPlayer:FindFirstChild("Backpack")
+    
+    local hasKnife = char:FindFirstChild("Knife") or (backpack and backpack:FindFirstChild("Knife"))
+    local hasGun = char:FindFirstChild("Gun") or (backpack and backpack:FindFirstChild("Gun"))
+    
+    if hasKnife then return colorMurderer end
+    if hasGun then return colorSheriff end
+    return colorInnocent
+end
+
+-- QUẢN LÝ DỌN DẸP SYSTEM
+_G.PhuocThoCleanUp = function()
+    if fovCircle then pcall(function() fovCircle:Remove() end) end
+    for _, tracer in pairs(tracers) do
+        pcall(function() tracer:Remove() end)
+    end
+    tracers = {}
+    
+    -- Restored Hitboxes
+    for _, v in pairs(Players:GetPlayers()) do
+        if v.Character and v.Character:FindFirstChild("HumanoidRootPart") then
+            v.Character.HumanoidRootPart.Size = defaultHitboxSize
+            v.Character.HumanoidRootPart.Transparency = 1
+        end
+    end
+end
+
+-- ANTI-AFK & JUMP CONNECTION
 player.Idled:Connect(function()
     if antiAfkEnabled then
         VirtualUser:CaptureController()
@@ -294,9 +327,11 @@ UserInputService.JumpRequest:Connect(function()
     end
 end)
 
+-- VÒNG LẶP RENDER (PRE-RENDER)
 RunService.PreRender:Connect(function(deltaTime)
     local mousePos = UserInputService:GetMouseLocation()
 
+    -- 1. FOV Circle Update
     if fovCircle then
         fovCircle.Position = mousePos
         fovCircle.Radius = fovRadius
@@ -306,6 +341,7 @@ RunService.PreRender:Connect(function(deltaTime)
     local myChar = player.Character
     local myRoot = myChar and (myChar:FindFirstChild("HumanoidRootPart") or myChar:FindFirstChild("Torso"))
     
+    -- 2. Movement Logic
     if myChar then
         local hum = myChar:FindFirstChildOfClass("Humanoid")
         if hum then hum.WalkSpeed = speedEnabled and walkSpeedValue or 16 end
@@ -331,6 +367,73 @@ RunService.PreRender:Connect(function(deltaTime)
             myRoot.AssemblyLinearVelocity = Vector3.zero
         elseif hum and hum.PlatformStand then
             hum.PlatformStand = false
+        end
+    end
+
+    -- 3. Aimlock (Nhấn giữ phím E)
+    if aimlockEnabled and UserInputService:IsKeyDown(Enum.KeyCode.E) then
+        local targetHead = getClosestHeadToMouse()
+        if targetHead then
+            camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, targetHead.Position), aimSmoothness)
+        end
+    end
+
+    -- 4. Hitbox Extender & ESP Processing Loop
+    for _, targetPlayer in pairs(Players:GetPlayers()) do
+        if targetPlayer ~= player and targetPlayer.Character then
+            local tChar = targetPlayer.Character
+            local tRoot = tChar:FindFirstChild("HumanoidRootPart")
+            local tHum = tChar:FindFirstChildOfClass("Humanoid")
+            
+            if tRoot and tHum and tHum.Health > 0 then
+                -- Hitbox logic
+                if hitboxEnabled then
+                    tRoot.Size = Vector3.new(hitboxSizeValue, hitboxSizeValue, hitboxSizeValue)
+                    tRoot.Transparency = 0.7
+                    tRoot.CanCollide = false
+                else
+                    tRoot.Size = defaultHitboxSize
+                    tRoot.Transparency = 1
+                end
+
+                -- Highlight / Box ESP Logic
+                local highlight = tChar:FindFirstChild("PhuocThoHighlight")
+                if boxEspEnabled or mm2RoleEspEnabled then
+                    if not highlight then
+                        highlight = Instance.new("Highlight")
+                        highlight.Name = "PhuocThoHighlight"
+                        highlight.Parent = tChar
+                    end
+                    highlight.Enabled = true
+                    highlight.FillColor = mm2RoleEspEnabled and getRoleColor(targetPlayer) or Color3.fromRGB(255, 255, 255)
+                    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+                    highlight.FillTransparency = 0.5
+                elseif highlight then
+                    highlight.Enabled = false
+                end
+
+                -- Tracer Line Logic
+                if tracerEspEnabled then
+                    if not tracers[targetPlayer] then
+                        tracers[targetPlayer] = Drawing.new("Line")
+                        tracers[targetPlayer].Thickness = 1.5
+                        tracers[targetPlayer].Transparency = 0.8
+                    end
+                    
+                    local line = tracers[targetPlayer]
+                    local screenPos, onScreen = camera:WorldToViewportPoint(tRoot.Position)
+                    if onScreen then
+                        line.From = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y)
+                        line.To = Vector2.new(screenPos.X, screenPos.Y)
+                        line.Color = mm2RoleEspEnabled and getRoleColor(targetPlayer) or Color3.fromRGB(255, 255, 255)
+                        line.Visible = true
+                    else
+                        line.Visible = false
+                    end
+                elseif tracers[targetPlayer] then
+                    tracers[targetPlayer].Visible = false
+                end
+            end
         end
     end
 end)
